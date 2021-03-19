@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_flutter_chat/components/message_stream.dart';
 
 class ChatScreen extends StatefulWidget {
   static const id = 'chat_screen';
@@ -10,8 +12,12 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+  final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
   User loggedInUser;
+  String message;
 
   @override
   void initState() {
@@ -27,6 +33,17 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  // void getMessages() async {
+  //   final messages = await _firestore.collection('messages').get();
+  //   for (var message in messages.docs) {
+  //     print(message.data());
+  //   }
+  // }
+
+  // void messagesStream() async {
+  //   _firestore.collection('messages').snapshots();
+  // }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -36,7 +53,13 @@ class _ChatScreenState extends State<ChatScreen> {
           IconButton(
               icon: Icon(Icons.close),
               onPressed: () {
-                //Implement logout functionality
+                try {
+                  _auth.signOut();
+                  loggedInUser = null;
+                  Navigator.pop(context);
+                } catch (e) {
+                  print(e);
+                }
               }),
         ],
         title: Text('⚡️Chat'),
@@ -47,6 +70,11 @@ class _ChatScreenState extends State<ChatScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
+            MessageStream(
+              stream: _firestore.collection('messages').snapshots(),
+              loggedInUser: loggedInUser,
+              scrollController: _scrollController,
+            ),
             Container(
               decoration: kMessageContainerDecoration,
               child: Row(
@@ -55,14 +83,25 @@ class _ChatScreenState extends State<ChatScreen> {
                   Expanded(
                     child: TextField(
                       onChanged: (value) {
-                        //Do something with the user input.
+                        message = value;
                       },
                       decoration: kMessageTextFieldDecoration,
+                      controller: _messageController,
                     ),
                   ),
                   FlatButton(
-                    onPressed: () {
-                      //Implement send functionality.
+                    onPressed: () async {
+                      _messageController.clear();
+                      await _firestore.collection('messages').add({
+                        'text': message,
+                        'sender': loggedInUser.email,
+                        'timestamp': DateTime.now().millisecondsSinceEpoch,
+                      });
+                      _scrollController.animateTo(
+                        _scrollController.position.maxScrollExtent,
+                        duration: Duration(seconds: 1),
+                        curve: Curves.fastOutSlowIn,
+                      );
                     },
                     child: Text(
                       'Send',
